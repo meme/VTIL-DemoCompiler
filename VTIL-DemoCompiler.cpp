@@ -1,4 +1,4 @@
-// Copyright © 2020-2021 Keegan Saunders
+// Copyright © 2021 Keegan Saunders
 //
 // Permission to use, copy, modify, and/or distribute this software for
 // any purpose with or without fee is hereby granted.
