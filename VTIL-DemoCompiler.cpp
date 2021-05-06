@@ -20,6 +20,12 @@
 #include <vtil/vtil>
 
 using namespace asmjit;
+namespace ins
+{
+using namespace vtil::ins;
+};
+
+static void compile( vtil::basic_block* basic_block, routine_state* state );
 
 struct routine_state
 {
@@ -41,7 +47,8 @@ struct routine_state
 		}
 		else
 		{
-			/* TODO(meme) create a namedLabel */
+			// TODO: Create a namedLabel
+			//
 			Label label = cc.newLabel();
 			label_map.insert( { address, label } );
 			return label;
@@ -52,13 +59,11 @@ struct routine_state
 	{
 		switch ( operand.bit_count() )
 		{
-		// TODO(meme) think critically about how to handle sized register access
+		// TODO: Handle sized register access
+		//
 		case 8:
-			// return cc.newGpb();
 		case 16:
-			// return cc.newGpw();
 		case 32:
-			// return cc.newGpd();
 		case 64:
 			return cc.newGpq();
 		default:
@@ -77,7 +82,7 @@ struct routine_state
 	{
 		using vtil::logger::log;
 
-		// TODO(meme) handle bit selectors on registers
+		// TODO: Handle bit selectors on registers
 
 		log( "get_reg: %s\n", operand.to_string() );
 		if ( operand.is_physical() )
@@ -85,13 +90,15 @@ struct routine_state
 			log( "\tis_physical\n" );
 			// Transform the VTIL register into an AsmJit one.
 			//
-			//
-			// TODO(meme) this shouldnt be a separate condition, but just
+			// TODO: This shouldnt be a separate condition, but just
 			// in the same switch
+			//
 			if ( operand.is_stack_pointer() )
 			{
 				log( "\t\tis_stack_pointer\n" );
-				// TODO(meme) this might cause problems.
+				// TODO: this might cause problems, the stack
+				// of the program and of VTIL are shared
+				//
 				return x86::rsp;
 			}
 			else if ( operand.is_flags() )
@@ -151,7 +158,9 @@ struct routine_state
 			if ( operand.is_image_base() )
 			{
 				log( "\t\tis_image_base\n" );
-				// TODO(meme) c'mon
+				// TODO: This obviously won't work for different
+				// base addresses
+				//
 				x86::Gp base_reg = reg_for_size( operand );
 				cc.mov( base_reg, Imm( 0x140'000'000 ) );
 				return base_reg;
@@ -177,25 +186,17 @@ struct routine_state
 	}
 };
 
-// What the hell is the shorthand for this?
-namespace ins
-{
-using namespace vtil::ins;
-};
-
-static void compile( vtil::basic_block* basic_block, routine_state* state );
-
 using fn_instruction_compiler_t = std::function<void( const vtil::il_iterator&, routine_state* )>;
 static const std::map<vtil::instruction_desc, fn_instruction_compiler_t> handler_table = {
 	{
-		// LDD | Reg | Reg | Imm | OP1 = [OP2+OP3]
 		ins::ldd,
 		[]( const vtil::il_iterator& instr, routine_state* state ) {
 			auto dest = instr->operands[0].reg();
 			auto src = instr->operands[1].reg();
 			auto offset = instr->operands[2].imm();
 
-			// FIXME(meme) figure out how to determine if the offset is signed or not?
+			// FIXME: Figure out how to determine if the offset is signed or not
+			//
 			state->cc.mov( state->get_reg( dest ), x86::ptr( state->get_reg( src ), offset.i64 ) );
 		},
 	},
@@ -205,7 +206,7 @@ static const std::map<vtil::instruction_desc, fn_instruction_compiler_t> handler
 			auto offset = instr->operands[1].imm();
 			auto v = instr->operands[2];
 
-			// FIXME(meme) there is an issue here where it cannot deduce the size
+			// FIXME: There is an issue here where it cannot deduce the size
 			// of the move?
 			//
 
@@ -267,8 +268,9 @@ static const std::map<vtil::instruction_desc, fn_instruction_compiler_t> handler
 				state->cc.sub( state->get_reg( dest ), tmp );
 
 				// AsmJit shits its pants when I use this, so we move to a temporary
-				// instead. TODO investigate
+				// instead. TODO: Investigate
 				// state->cc.sub( state->get_reg( dest ), src.imm().i64 );
+				//
 			}
 			else
 			{
@@ -289,6 +291,7 @@ static const std::map<vtil::instruction_desc, fn_instruction_compiler_t> handler
 				state->cc.add( state->get_reg( lhs ), tmp );
 
 				// See note on sub
+				//
 			}
 			else
 			{
@@ -304,8 +307,9 @@ static const std::map<vtil::instruction_desc, fn_instruction_compiler_t> handler
 
 			fassert( dst_1.is_immediate() && dst_2.is_immediate() );
 
-			// We should check if the block is compiled in order to avoid the
-			// jump here, but I think the optimizer removes this? TODO
+			// TODO: We should check if the block is compiled in order to avoid the
+			// jump here, but I think the optimizer removes this?
+			//
 			state->cc.test( state->get_reg( cond ), state->get_reg( cond ) );
 
 			state->cc.jnz( state->get_label( dst_1.imm().u64 ) );
@@ -330,13 +334,14 @@ static const std::map<vtil::instruction_desc, fn_instruction_compiler_t> handler
 		} },
 	{ ins::vexit,
 		[]( const vtil::il_iterator& it, routine_state* state ) {
-			// FIXME(keegan) call out into handler
+			// TODO: Call out into handler
+			//
 			state->cc.ret();
 		} },
 	{
 		ins::vxcall,
 		[]( const vtil::il_iterator& it, routine_state* state ) {
-			// FIXME(meme) this should be a call, but you need to create
+			// TODO: This should be a call, but you need to create
 			// a call, etc. for the register allocator
 			// if ( it->operands[ 0 ].is_immediate() )
 			// {
@@ -346,10 +351,12 @@ static const std::map<vtil::instruction_desc, fn_instruction_compiler_t> handler
 			// {
 			//     state->cc.jmp( state->get_reg( it->operands[ 0 ].reg() ) );
 			// }
+			//
 
 			auto dest = it.block->next[0]->entry_vip;
 
 			// Jump to next block.
+			//
 			state->cc.jmp( state->get_label( dest ) );
 
 			if ( !state->is_compiled.count( dest ) )
@@ -415,8 +422,9 @@ static const std::map<vtil::instruction_desc, fn_instruction_compiler_t> handler
 	{ ins::vemit,
 		[]( const vtil::il_iterator& it, routine_state* state ) {
 			auto data = it->operands[0].imm().u64;
-			// TODO(keegan) are we guarenteed that the registers used by these
+			// TODO: Are we guarenteed that the registers used by these
 			// embedded instructions are actually live at the point these are executed?
+			//
 			state->cc.embedUInt8( (uint8_t)data );
 		} },
 #define MAP_CONDITIONAL( instrT, opcode, ropcode )                                                                     \
@@ -459,7 +467,8 @@ static const std::map<vtil::instruction_desc, fn_instruction_compiler_t> handler
 					auto res = it->operands[2];
 
 					state->cc.xor_( state->get_reg( dest ), state->get_reg( dest ) );
-					// TODO(meme) CC can be an immediate, how does that work?
+					// TODO: CC can be an immediate, how does that work?
+					//
 					state->cc.test( state->get_reg( cc.reg() ), state->get_reg( cc.reg() ) );
 
 					if ( res.is_immediate() )
@@ -494,17 +503,23 @@ static void compile( vtil::basic_block* basic_block, routine_state* state )
 	}
 }
 
-class MyErrorHandler : public ErrorHandler
+class DemoErrorHandler : public ErrorHandler
 {
 public:
 	void handleError( Error err, const char* message, BaseEmitter* origin ) override
 	{
-		printf( "AsmJit error: %s\n", message );
+		std::cerr << "AsmJit error: " << message << "\n";
 	}
 };
 
 int main( int argc, char* argv[] )
 {
+	if ( argc < 3 )
+	{
+		std::cerr << "Usage: VTIL-DemoCompiler [input] [output]\n";
+		return 1;
+	}
+
 	std::ifstream f( argv[1], std::ios::binary );
 	vtil::routine* output = nullptr;
 	vtil::deserialize( f, output );
@@ -512,16 +527,13 @@ int main( int argc, char* argv[] )
 	if ( !output )
 		return 1;
 
-	// VTIL uses ->next for successors and ->prev for predecessors.
-	//
-
 	JitRuntime rt;
 	FileLogger logger( stdout );
-	MyErrorHandler myErrorHandler;
+	DemoErrorHandler errorHandler;
 	CodeHolder code;
 
 	code.init( rt.environment() );
-	code.setErrorHandler( &myErrorHandler );
+	code.setErrorHandler( &errorHandler );
 
 	code.setLogger( &logger );
 	x86::Compiler cc( &code );
@@ -536,9 +548,8 @@ int main( int argc, char* argv[] )
 
 	CodeBuffer& buffer = code.sectionById( 0 )->buffer();
 
-	std::ofstream of( "output.bin", std::ios::out | std::ios::binary );
+	std::ofstream of( argv[2], std::ios::out | std::ios::binary );
 	of.write( (const char*)buffer.data(), buffer.size() );
 	of.close();
-
 	return 0;
 }
